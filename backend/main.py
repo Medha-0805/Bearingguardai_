@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 import agent
 import db_tools
+import ml_tools
 
 app = FastAPI(title="BearingGuard AI API")
 
@@ -65,6 +66,23 @@ def status():
 def summary(window_days: int = 3):
     """Health summary over a recent window, for the dashboard's status panel."""
     return db_tools.get_health_summary("bearing_1", window_days)
+
+
+@app.get("/predict/fault-type")
+def predict_fault_type(bearing_id: str = "bearing_1"):
+    """
+    ML-based health-state prediction (Random Forest) from the bearing's
+    latest reading. Binary Normal/Anomalous classifier — NOT a
+    multi-fault-type (inner race / outer race / ball) identifier; see
+    ml_tools.predict_fault_type's docstring for why.
+    """
+    return ml_tools.predict_fault_type(bearing_id)
+
+
+@app.get("/predict/rul")
+def predict_rul(bearing_id: str = "bearing_1"):
+    """ML-based Remaining Useful Life estimate (hours) from the bearing's latest reading."""
+    return ml_tools.estimate_rul(bearing_id)
 
 
 @app.post("/chat", response_model=ChatResponse)

@@ -1,8 +1,10 @@
-import type { StatusResponse, Reading } from "../types";
+import type { StatusResponse, Reading, FaultTypePrediction, RulEstimate } from "../types";
 
 interface Props {
   status: StatusResponse | null;
   readings: Reading[];
+  faultPrediction?: FaultTypePrediction | null;
+  rulEstimate?: RulEstimate | null;
 }
 
 function severityColor(label: string): string {
@@ -24,7 +26,7 @@ function recommendedAction(label: string): string {
   return "No action needed — operating within normal range.";
 }
 
-export default function StatusPanel({ status, readings }: Props) {
+export default function StatusPanel({ status, readings, faultPrediction, rulEstimate }: Props) {
   if (!status) {
     return (
       <div className="bg-panel border border-border rounded-md p-5 font-mono text-text-muted text-sm">
@@ -76,6 +78,33 @@ export default function StatusPanel({ status, readings }: Props) {
           {recommendedAction(status.status)}
         </div>
       </div>
+
+      {(faultPrediction || rulEstimate) && (
+        <div className="pt-3 border-t border-border">
+          <div className="text-[10px] uppercase tracking-wider text-text-muted font-mono mb-1.5">
+            ML Prediction
+          </div>
+          {faultPrediction && (
+            <div className="text-sm mb-1">
+              <span className={faultPrediction.predicted_health_state === "Anomalous" ? "text-severe" : "text-ok"}>
+                {faultPrediction.predicted_health_state}
+              </span>
+              <span className="text-text-muted"> · {(faultPrediction.confidence * 100).toFixed(0)}% confidence</span>
+            </div>
+          )}
+          {rulEstimate && (
+            <div className="text-sm mb-1">
+              Est. RUL: <span className="font-mono">{rulEstimate.estimated_rul_hours.toFixed(1)}h</span>
+              <span className="text-text-muted"> (~{rulEstimate.estimated_rul_days.toFixed(1)}d)</span>
+            </div>
+          )}
+          <div className="text-[10px] text-text-muted leading-snug mt-1">
+            Random Forest health-state classifier (Normal/Anomalous only, not a
+            specific fault-type ID) + RUL estimate (~28h typical error) — a
+            supplementary ML signal alongside the rule-based status above.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

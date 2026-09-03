@@ -31,3 +31,24 @@ export interface ChatMessage {
   role: "user" | "agent";
   content: string;
 }
+
+// From GET /predict/fault-type. Despite the endpoint name, the model is a
+// binary Normal/Anomalous health-state classifier, not a multi-fault-type
+// (inner race / outer race / ball) identifier — see backend/ml_tools.py.
+export interface FaultTypePrediction {
+  bearing_id: string;
+  reading_time: string;
+  predicted_health_state: "Normal" | "Anomalous";
+  confidence: number;
+  class_probabilities: Record<string, number>;
+  model_scope_note: string;
+}
+
+// From GET /predict/rul.
+export interface RulEstimate {
+  bearing_id: string;
+  reading_time: string;
+  estimated_rul_hours: number;
+  estimated_rul_days: number;
+  model_scope_note: string;
+}

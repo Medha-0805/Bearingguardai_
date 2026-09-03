@@ -1,0 +1,82 @@
+{
+  "trained_at_utc": "2026-09-03T10:01:00.810312+00:00",
+  "data_source": "NASA/IMS (Univ. of Cincinnati) bearing prognostics dataset, Test 2 -- 4 bearings, 10-min sampling, 2004-02-12 to 2004-02-19, run until bearing_1's documented outer-race failure ended the test.",
+  "scope_note": "fault_classifier is a binary Normal-vs-Anomalous health-state classifier, NOT a multi-fault-type (inner race / outer race / ball) classifier -- this project's available data contains only one genuine failure type (outer race, bearing_1). See train_model.py's module docstring and TRAINING_REPORT.md.",
+  "fault_classifier": {
+    "model": "RandomForestClassifier",
+    "classes": [
+      "Anomalous",
+      "Normal"
+    ],
+    "train_rows": 2952,
+    "test_rows": 984,
+    "train_period_end": "2004-02-17 13:22:39",
+    "test_period_start": "2004-02-17 13:32:39",
+    "accuracy": 0.936,
+    "f1_macro": 0.9152,
+    "confusion_matrix": [
+      [
+        217,
+        27
+      ],
+      [
+        36,
+        704
+      ]
+    ],
+    "confusion_matrix_labels": [
+      "Anomalous",
+      "Normal"
+    ],
+    "classification_report": {
+      "Anomalous": {
+        "precision": 0.857707509881423,
+        "recall": 0.889344262295082,
+        "f1-score": 0.8732394366197183,
+        "support": 244.0
+      },
+      "Normal": {
+        "precision": 0.9630642954856361,
+        "recall": 0.9513513513513514,
+        "f1-score": 0.9571719918422842,
+        "support": 740.0
+      },
+      "accuracy": 0.9359756097560976,
+      "macro avg": {
+        "precision": 0.9103859026835295,
+        "recall": 0.9203478068232167,
+        "f1-score": 0.9152057142310013,
+        "support": 984.0
+      },
+      "weighted avg": {
+        "precision": 0.9369392388927216,
+        "recall": 0.9359756097560976,
+        "f1-score": 0.9363594476610788,
+        "support": 984.0
+      }
+    },
+    "feature_importances": {
+      "rms": 0.4194,
+      "kurtosis": 0.3849,
+      "bpfo_energy": 0.1957
+    }
+  },
+  "rul_regressor": {
+    "model": "RandomForestRegressor",
+    "train_rows": 688,
+    "test_rows": 296,
+    "mae_hours": 28.53,
+    "mae_pct_of_trajectory": 17.4,
+    "rmse_hours": 32.75,
+    "r2": -4.2885,
+    "cv_mae_hours_mean": 28.85,
+    "cv_mae_hours_std": 13.43,
+    "trained_on": "bearing_1 (only genuine run-to-failure trajectory available)",
+    "feature_importances": {
+      "rms": 0.9095,
+      "kurtosis": 0.054,
+      "bpfo_energy": 0.0365
+    },
+    "caveat": "Validated only against the later, unseen-magnitude portion of the same bearing's own trajectory -- there is no second failure run in this project's data to test generalization across physically different bearings. The negative R^2 reflects tree-based regressors' known inability to extrapolate beyond feature ranges seen in training, not a bug; MAE/RMSE (in hours) are the metrics to read here. See train_model.py for the full explanation."
+  }
+}

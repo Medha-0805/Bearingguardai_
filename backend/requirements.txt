@@ -2,6 +2,7 @@ numpy
 pandas
 scipy
 scikit-learn
+joblib
 matplotlib
 fastapi==0.138.1
 uvicorn==0.49.0

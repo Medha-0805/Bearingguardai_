@@ -1,10 +1,24 @@
 # Runtime dependencies for the deployed API only (main.py, agent.py,
-# db_tools.py). The data-science libs in requirements.txt are only
-# needed for the one-time local data-prep scripts (explore_data.py,
-# detect_anomalies.py, push_to_supabase.py) and aren't installed here
-# to keep the deploy build fast and light.
+# db_tools.py, ml_tools.py). Most of the data-science libs in
+# requirements.txt are only needed for the one-time local data-prep /
+# training scripts (explore_data.py, detect_anomalies.py,
+# push_to_supabase.py, train_model.py) and aren't installed here to
+# keep the deploy build fast and light.
+#
+# scikit-learn + joblib ARE needed here now: main.py's /predict/*
+# endpoints load the trained models (backend/models/*.joblib) and run
+# live inference, not just training. numpy is scikit-learn's own hard
+# transitive dependency (it unpickles/operates on numpy arrays), so it
+# has to be present at runtime even though nothing here imports it
+# directly -- pip would pull it in anyway, but pinning it explicitly
+# keeps this file an accurate list of what's actually required, and
+# skipping matplotlib/scipy/pandas keeps the deploy image lean since
+# nothing at request-time needs them.
 fastapi==0.138.1
 uvicorn==0.49.0
 supabase==2.31.0
 groq==1.5.0
 python-dotenv==1.2.2
+scikit-learn==1.9.0
+joblib==1.5.3
+numpy==2.5.0

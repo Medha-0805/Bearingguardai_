@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from groq import Groq
 
 import db_tools
+import ml_tools
 
 load_dotenv()
 
@@ -46,6 +47,19 @@ every individual raw reading.
 
 Always use the available tools to answer questions — never guess or
 invent numbers.
+
+Two of the tools, predict_fault_type and estimate_rul, are backed by
+trained machine-learning models (Random Forest), not the rule-based
+z-score logic the others use. predict_fault_type only ever returns
+"Normal" or "Anomalous" — it is a health-state classifier, NOT a
+fault-type identifier, so never claim it detected a specific fault like
+"inner race" or "ball defect"; if asked which specific fault type is
+present, say plainly that this system can only confirm outer-race
+defects (the one fault type it has real training examples of) and
+cannot distinguish other fault types. estimate_rul gives a rough
+remaining-hours estimate with real but limited accuracy (roughly ±28
+hours on this dataset) — present it as a planning signal, not a precise
+countdown.
 
 CRITICAL RULE: if a tool result contains "requires_attention": true, or
 "ended_with_suspected_equipment_stoppage": true, or a "status" field that
@@ -101,12 +115,48 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "predict_fault_type",
+            "description": (
+                "Use the trained Random Forest ML model to classify a bearing's current "
+                "health state (Normal vs Anomalous) from its latest reading. This is a "
+                "binary health-state classifier, NOT a specific fault-type (inner race / "
+                "outer race / ball) identifier — use it for 'is there a fault right now' "
+                "style questions, not 'what type of fault'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"bearing_id": {"type": "string"}},
+                "required": ["bearing_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "estimate_rul",
+            "description": (
+                "Use the trained Random Forest ML model to estimate Remaining Useful Life "
+                "(hours until likely failure) from a bearing's latest reading. Real but "
+                "approximate (~28 hour MAE on this dataset) — treat as a planning signal."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"bearing_id": {"type": "string"}},
+                "required": ["bearing_id"],
+            },
+        },
+    },
 ]
 
 TOOL_REGISTRY = {
     "get_anomalies": db_tools.get_anomalies,
     "get_threshold_status": db_tools.get_threshold_status,
     "get_health_summary": db_tools.get_health_summary,
+    "predict_fault_type": ml_tools.predict_fault_type,
+    "estimate_rul": ml_tools.estimate_rul,
 }
 
 # Generic safety net: no matter which tool ran or how it was called, never
@@ -127,10 +177,19 @@ def _safe_tool_content(result: dict) -> str:
     return json.dumps(summary, default=str)
 
 
+# A question can legitimately need more than one tool now (e.g. "what's
+# the predicted fault type AND the remaining useful life" pulls from two
+# separate ML tools) -- cap the back-and-forth so a confused model can't
+# loop forever, but allow more than one round.
+MAX_TOOL_ROUNDS = 4
+
+
 def ask_agent(user_question: str, max_retries: int = 2) -> str:
     """
     Sends the question to the LLM with tools available, executes whichever
-    tool(s) it calls, then asks it to explain the real result in words.
+    tool(s) it calls, feeds the real results back, and repeats until the
+    model answers in plain text instead of calling another tool (or the
+    round cap is hit).
 
     Small/fast models occasionally generate a malformed function call
     instead of a properly structured one — this is a known reliability
@@ -143,42 +202,50 @@ def ask_agent(user_question: str, max_retries: int = 2) -> str:
         {"role": "user", "content": user_question},
     ]
 
-    message = None
-    for attempt in range(max_retries + 1):
-        try:
-            response = client.chat.completions.create(
-                model=MODEL, messages=messages, tools=TOOLS, tool_choice="auto",
-                temperature=0.2,
-            )
-            message = response.choices[0].message
-            break
-        except Exception as e:
-            print(f"  [tool-call generation failed, attempt {attempt + 1}/{max_retries + 1}: {e}]")
-            if attempt == max_retries:
-                return "Sorry — I had trouble generating a valid tool call for that question after a few attempts. Please try rephrasing it."
-            time.sleep(1)
+    for round_num in range(MAX_TOOL_ROUNDS):
+        message = None
+        for attempt in range(max_retries + 1):
+            try:
+                # tools/tool_choice stay on every round -- Groq rejects a
+                # response with tool_calls if the request that produced it
+                # didn't offer tools, so once tools are on they need to stay
+                # on until the model actually stops calling them.
+                response = client.chat.completions.create(
+                    model=MODEL, messages=messages, tools=TOOLS, tool_choice="auto",
+                    temperature=0.2,
+                )
+                message = response.choices[0].message
+                break
+            except Exception as e:
+                print(f"  [tool-call generation failed, attempt {attempt + 1}/{max_retries + 1}: {e}]")
+                if attempt == max_retries:
+                    return "Sorry — I had trouble generating a valid tool call for that question after a few attempts. Please try rephrasing it."
+                time.sleep(1)
 
-    if not message.tool_calls:
-        # The model answered directly without needing a tool.
-        return message.content
+        if not message.tool_calls:
+            # The model has what it needs and answered in plain text.
+            return message.content
 
-    messages.append(message)
+        messages.append(message)
 
-    for tool_call in message.tool_calls:
-        func_name = tool_call.function.name
-        args = json.loads(tool_call.function.arguments)
-        print(f"  [agent called {func_name}({args})]")
+        for tool_call in message.tool_calls:
+            func_name = tool_call.function.name
+            args = json.loads(tool_call.function.arguments)
+            print(f"  [agent called {func_name}({args})]")
 
-        func = TOOL_REGISTRY[func_name]
-        result = func(**args)
+            func = TOOL_REGISTRY[func_name]
+            result = func(**args)
 
-        messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call.id,
-            "name": func_name,
-            "content": _safe_tool_content(result),
-        })
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "name": func_name,
+                "content": _safe_tool_content(result),
+            })
 
+    # Hit the round cap while the model still wanted another tool call --
+    # ask once more without tools available so it's forced to answer in
+    # words from whatever real results it already has.
     final_response = client.chat.completions.create(
         model=MODEL, messages=messages, temperature=0.2,
     )

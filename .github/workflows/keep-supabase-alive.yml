@@ -1,0 +1,29 @@
+name: Keep Supabase project alive
+
+# Supabase's free tier pauses a project after 7 days with no API
+# activity (and eventually deletes long-paused projects). This job
+# makes one small, real read against the database every few days so
+# that clock never runs out — no manual attention needed.
+on:
+  schedule:
+    - cron: "0 6 */3 * *" # every 3 days at 06:00 UTC
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab too
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping bearing_readings table
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/bearing_readings?select=reading_time&limit=1" \
+            -H "apikey: ${SUPABASE_SERVICE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_KEY}")
+          echo "Supabase responded with HTTP $status"
+          if [ "$status" -ge 400 ]; then
+            echo "::error::Unexpected status from Supabase — check SUPABASE_URL/SUPABASE_SERVICE_KEY secrets."
+            exit 1
+          fi
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

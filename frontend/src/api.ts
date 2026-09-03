@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { TrendResponse, StatusResponse } from "./types";
+import type { TrendResponse, StatusResponse, FaultTypePrediction, RulEstimate } from "./types";
 
 // In production, set VITE_API_BASE_URL (e.g. on Vercel) to the deployed
 // backend's URL. Falls back to localhost for local dev.
@@ -12,6 +12,16 @@ export async function fetchTrend(): Promise<TrendResponse> {
 
 export async function fetchStatus(): Promise<StatusResponse> {
   const res = await axios.get<StatusResponse>(`${API_BASE}/status`);
+  return res.data;
+}
+
+export async function fetchFaultTypePrediction(): Promise<FaultTypePrediction> {
+  const res = await axios.get<FaultTypePrediction>(`${API_BASE}/predict/fault-type`);
+  return res.data;
+}
+
+export async function fetchRulEstimate(): Promise<RulEstimate> {
+  const res = await axios.get<RulEstimate>(`${API_BASE}/predict/rul`);
   return res.data;
 }
 

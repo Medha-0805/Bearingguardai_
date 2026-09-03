@@ -1,0 +1,8 @@
+{
+  "feature_cols": [
+    "rms",
+    "kurtosis",
+    "bpfo_energy"
+  ],
+  "trained_at_utc": "2026-09-03T10:01:00.810312+00:00"
+}

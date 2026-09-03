@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { fetchTrend, fetchStatus } from "./api";
-import type { Reading, StatusResponse } from "./types";
+import { fetchTrend, fetchStatus, fetchFaultTypePrediction, fetchRulEstimate } from "./api";
+import type { Reading, StatusResponse, FaultTypePrediction, RulEstimate } from "./types";
 import StatusPanel from "./components/StatusPanel";
 import TrendChart from "./components/TrendChart";
 import FeatureSparklines from "./components/FeatureSparklines";
@@ -11,6 +11,8 @@ export default function App() {
   const [readings, setReadings] = useState<Reading[]>([]);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [faultPrediction, setFaultPrediction] = useState<FaultTypePrediction | null>(null);
+  const [rulEstimate, setRulEstimate] = useState<RulEstimate | null>(null);
 
   useEffect(() => {
     Promise.all([fetchTrend(), fetchStatus()])
@@ -19,6 +21,12 @@ export default function App() {
         setStatus(statusData);
       })
       .catch(() => setError("Could not reach the backend. Is it running on port 8000?"));
+
+    // ML predictions are fetched separately and fail silently (leaving the
+    // panel section simply hidden) — they're a bonus on top of the core
+    // rule-based dashboard above, not something that should block it.
+    fetchFaultTypePrediction().then(setFaultPrediction).catch(() => setFaultPrediction(null));
+    fetchRulEstimate().then(setRulEstimate).catch(() => setRulEstimate(null));
   }, []);
 
   const threshold = status?.alert_threshold_rms ?? 0.1546;
@@ -49,7 +57,12 @@ export default function App() {
         style={{ animationDelay: "60ms" }}
       >
         <TrendChart readings={readings} threshold={threshold} />
-        <StatusPanel status={status} readings={readings} />
+        <StatusPanel
+          status={status}
+          readings={readings}
+          faultPrediction={faultPrediction}
+          rulEstimate={rulEstimate}
+        />
       </div>
 
       <div className="fade-in" style={{ animationDelay: "120ms" }}>
